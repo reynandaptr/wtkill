@@ -28,7 +28,10 @@ pub fn start(roots: Vec<PathBuf>, fetch: bool, tx: Sender<Update>) -> JoinHandle
                 let _ = tx.send(Update::Found(e));
                 let tx = tx.clone();
                 s.spawn(move |_| {
-                    let _ = tx.send(Update::Size { id, size: disk_usage(&path) });
+                    let _ = tx.send(Update::Size {
+                        id,
+                        size: disk_usage(&path),
+                    });
                 });
             });
             inspect_groups(worktrees, fetch, &tx);
@@ -47,11 +50,18 @@ pub fn inspect_groups(entries: Vec<Entry>, fetch: bool, tx: &Sender<Update>) {
     groups.into_par_iter().for_each(|(main, entries)| {
         if fetch
             && let Some(main) = &main
-                && let Err(error) = gitinfo::fetch(main) {
-                    let _ = tx.send(Update::FetchFailed { main_repo: main.clone(), error });
-                }
+            && let Err(error) = gitinfo::fetch(main)
+        {
+            let _ = tx.send(Update::FetchFailed {
+                main_repo: main.clone(),
+                error,
+            });
+        }
         entries.par_iter().for_each(|e| {
-            let _ = tx.send(Update::Git { id: e.id, result: gitinfo::inspect(&e.path) });
+            let _ = tx.send(Update::Git {
+                id: e.id,
+                result: gitinfo::inspect(&e.path),
+            });
         });
     });
 }
@@ -67,10 +77,14 @@ pub fn spawn_delete(
 ) -> JoinHandle<()> {
     thread::spawn(move || {
         for (entry, git) in rows {
-            let update = match delete_entry(&entry, git.as_ref(), confirmed_strict, action, &roots, &cwd) {
-                Ok(note) => Update::Deleted { id: entry.id, note },
-                Err(error) => Update::DeleteFailed { id: entry.id, error },
-            };
+            let update =
+                match delete_entry(&entry, git.as_ref(), confirmed_strict, action, &roots, &cwd) {
+                    Ok(note) => Update::Deleted { id: entry.id, note },
+                    Err(error) => Update::DeleteFailed {
+                        id: entry.id,
+                        error,
+                    },
+                };
             let _ = tx.send(update);
         }
     })

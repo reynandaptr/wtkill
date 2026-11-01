@@ -33,7 +33,10 @@ impl Row {
     /// Path relative to the root it was found under.
     pub fn display_path(&self) -> String {
         let p = &self.entry.path;
-        p.strip_prefix(&self.entry.root).unwrap_or(p).to_string_lossy().into_owned()
+        p.strip_prefix(&self.entry.root)
+            .unwrap_or(p)
+            .to_string_lossy()
+            .into_owned()
     }
 
     fn git_ok(&self) -> Option<&GitInfo> {
@@ -53,14 +56,26 @@ pub enum Mode {
     Normal,
     Filter,
     /// `yes_selected`: which button has focus in the non-strict prompt.
-    Confirm { ids: Vec<usize>, action: Action, strict: bool, input: String, yes_selected: bool },
-    ConfirmQuit { yes_selected: bool },
+    Confirm {
+        ids: Vec<usize>,
+        action: Action,
+        strict: bool,
+        input: String,
+        yes_selected: bool,
+    },
+    ConfirmQuit {
+        yes_selected: bool,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Command {
     /// `strict`: the user answered the strict (`yes`) prompt, so `--force` is allowed.
-    Delete { ids: Vec<usize>, action: Action, strict: bool },
+    Delete {
+        ids: Vec<usize>,
+        action: Action,
+        strict: bool,
+    },
     Fetch,
     Quit,
 }
@@ -147,7 +162,13 @@ impl App {
 
     pub fn apply(&mut self, update: Update) {
         match update {
-            Update::Found(entry) => self.rows.push(Row { entry, size: None, git: None, status: RowStatus::Idle, note: None }),
+            Update::Found(entry) => self.rows.push(Row {
+                entry,
+                size: None,
+                git: None,
+                status: RowStatus::Idle,
+                note: None,
+            }),
             Update::Size { id, size } => {
                 if let Some(i) = self.index_of(id) {
                     self.rows[i].size = Some(size);
@@ -159,7 +180,11 @@ impl App {
                 }
             }
             Update::FetchFailed { main_repo, error } => {
-                for r in self.rows.iter_mut().filter(|r| r.entry.main_repo.as_ref() == Some(&main_repo)) {
+                for r in self
+                    .rows
+                    .iter_mut()
+                    .filter(|r| r.entry.main_repo.as_ref() == Some(&main_repo))
+                {
                     r.note = Some(format!("fetch failed: {error}"));
                 }
             }
@@ -189,10 +214,11 @@ impl App {
     fn clamp(&mut self) {
         let visible = self.visible();
         if let Some(id) = self.selected_id
-            && let Some(pos) = visible.iter().position(|&i| self.rows[i].entry.id == id) {
-                self.cursor = pos;
-                return;
-            }
+            && let Some(pos) = visible.iter().position(|&i| self.rows[i].entry.id == id)
+        {
+            self.cursor = pos;
+            return;
+        }
         self.cursor = self.cursor.min(visible.len().saturating_sub(1));
         self.selected_id = visible.get(self.cursor).map(|&i| self.rows[i].entry.id);
     }
@@ -229,7 +255,9 @@ impl App {
     pub fn visible(&self) -> Vec<usize> {
         let needle = self.filter.to_lowercase();
         let mut idx: Vec<usize> = (0..self.rows.len())
-            .filter(|&i| needle.is_empty() || self.rows[i].display_path().to_lowercase().contains(&needle))
+            .filter(|&i| {
+                needle.is_empty() || self.rows[i].display_path().to_lowercase().contains(&needle)
+            })
             .collect();
         idx.sort_by(|&a, &b| self.compare(&self.rows[a], &self.rows[b]));
         idx
@@ -244,7 +272,8 @@ impl App {
     }
 
     pub fn handle_key(&mut self, key: KeyEvent) -> Vec<Command> {
-        let ctrl_c = key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('c');
+        let ctrl_c =
+            key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('c');
         match std::mem::replace(&mut self.mode, Mode::Normal) {
             Mode::Normal => {
                 if ctrl_c {
@@ -269,7 +298,13 @@ impl App {
                 self.clamp();
                 vec![]
             }
-            Mode::Confirm { ids, action, strict, mut input, yes_selected } => {
+            Mode::Confirm {
+                ids,
+                action,
+                strict,
+                mut input,
+                yes_selected,
+            } => {
                 let confirmed = if strict {
                     match key.code {
                         KeyCode::Enter if input == "yes" => true,
@@ -277,14 +312,26 @@ impl App {
                         KeyCode::Char(_) if ctrl_c => false,
                         KeyCode::Char(c) => {
                             input.push(c);
-                            self.mode = Mode::Confirm { ids, action, strict, input, yes_selected };
+                            self.mode = Mode::Confirm {
+                                ids,
+                                action,
+                                strict,
+                                input,
+                                yes_selected,
+                            };
                             return vec![];
                         }
                         _ => {
                             if key.code == KeyCode::Backspace {
                                 input.pop();
                             }
-                            self.mode = Mode::Confirm { ids, action, strict, input, yes_selected };
+                            self.mode = Mode::Confirm {
+                                ids,
+                                action,
+                                strict,
+                                input,
+                                yes_selected,
+                            };
                             return vec![];
                         }
                     }
@@ -292,13 +339,25 @@ impl App {
                     match button_key(key) {
                         ButtonKey::Toggle => {
                             let yes_selected = !yes_selected;
-                            self.mode = Mode::Confirm { ids, action, strict, input, yes_selected };
+                            self.mode = Mode::Confirm {
+                                ids,
+                                action,
+                                strict,
+                                input,
+                                yes_selected,
+                            };
                             return vec![];
                         }
                         ButtonKey::Activate => yes_selected,
                         ButtonKey::Cancel => false,
                         ButtonKey::Ignore => {
-                            self.mode = Mode::Confirm { ids, action, strict, input, yes_selected };
+                            self.mode = Mode::Confirm {
+                                ids,
+                                action,
+                                strict,
+                                input,
+                                yes_selected,
+                            };
                             return vec![];
                         }
                     }
@@ -312,11 +371,17 @@ impl App {
                     }
                 }
                 self.marks.clear();
-                vec![Command::Delete { ids, action, strict }]
+                vec![Command::Delete {
+                    ids,
+                    action,
+                    strict,
+                }]
             }
             Mode::ConfirmQuit { yes_selected } => match button_key(key) {
                 ButtonKey::Toggle => {
-                    self.mode = Mode::ConfirmQuit { yes_selected: !yes_selected };
+                    self.mode = Mode::ConfirmQuit {
+                        yes_selected: !yes_selected,
+                    };
                     vec![]
                 }
                 ButtonKey::Activate if yes_selected => vec![Command::Quit],
@@ -331,7 +396,9 @@ impl App {
 
     fn quit(&mut self) -> Vec<Command> {
         if self.deleting() {
-            self.mode = Mode::ConfirmQuit { yes_selected: false };
+            self.mode = Mode::ConfirmQuit {
+                yes_selected: false,
+            };
             vec![]
         } else {
             vec![Command::Quit]
@@ -344,16 +411,21 @@ impl App {
             KeyCode::Down | KeyCode::Char('j') => self.move_cursor(self.cursor + 1),
             KeyCode::Char(' ') => {
                 if let Some(id) = self.selected().map(|r| r.entry.id)
-                    && !self.marks.remove(&id) {
-                        self.marks.insert(id);
-                    }
+                    && !self.marks.remove(&id)
+                {
+                    self.marks.insert(id);
+                }
             }
             KeyCode::Char('d') => self.start_delete(Action::Remove),
             KeyCode::Char('D') => self.start_delete(Action::RemoveAndBranch),
             KeyCode::Char('f') => {
                 // Show states as pending until the post-fetch inspection lands,
                 // so nobody deletes based on pre-fetch data.
-                for r in self.rows.iter_mut().filter(|r| r.entry.kind == Kind::Worktree && r.status != RowStatus::Deleting) {
+                for r in self
+                    .rows
+                    .iter_mut()
+                    .filter(|r| r.entry.kind == Kind::Worktree && r.status != RowStatus::Deleting)
+                {
                     r.git = None;
                 }
                 return vec![Command::Fetch];
@@ -382,9 +454,13 @@ impl App {
         } else {
             self.marks.iter().copied().collect()
         };
-        targets.retain(|id| self.row(*id).is_some_and(|r| r.status != RowStatus::Deleting));
-        let (clones, ids): (Vec<usize>, Vec<usize>) =
-            targets.into_iter().partition(|id| self.row(*id).is_some_and(|r| r.entry.kind == Kind::Clone));
+        targets.retain(|id| {
+            self.row(*id)
+                .is_some_and(|r| r.status != RowStatus::Deleting)
+        });
+        let (clones, ids): (Vec<usize>, Vec<usize>) = targets
+            .into_iter()
+            .partition(|id| self.row(*id).is_some_and(|r| r.entry.kind == Kind::Clone));
         if ids.is_empty() {
             for id in clones {
                 if let Some(i) = self.index_of(id) {
@@ -394,8 +470,18 @@ impl App {
             return;
         }
         // Pending git status counts as strict: we can't yet tell it's safe.
-        let strict = ids.iter().any(|id| self.row(*id).and_then(Row::state).is_none_or(|s| s.is_strict()));
-        self.mode = Mode::Confirm { ids, action, strict, input: String::new(), yes_selected: false };
+        let strict = ids.iter().any(|id| {
+            self.row(*id)
+                .and_then(Row::state)
+                .is_none_or(|s| s.is_strict())
+        });
+        self.mode = Mode::Confirm {
+            ids,
+            action,
+            strict,
+            input: String::new(),
+            yes_selected: false,
+        };
     }
 }
 
@@ -427,7 +513,12 @@ mod tests {
         }
     }
     fn done() -> Option<GitInfo> {
-        Some(git(0, Upstream::Gone { name: "origin/b".into() }))
+        Some(git(
+            0,
+            Upstream::Gone {
+                name: "origin/b".into(),
+            },
+        ))
     }
     fn risky() -> Option<GitInfo> {
         Some(git(3, Upstream::None))
@@ -447,7 +538,13 @@ mod tests {
                 is_symlink: false,
             }));
             if let Some(bytes) = size {
-                a.apply(Update::Size { id, size: Size { bytes, partial: false } });
+                a.apply(Update::Size {
+                    id,
+                    size: Size {
+                        bytes,
+                        partial: false,
+                    },
+                });
             }
             if let Some(g) = g {
                 a.apply(Update::Git { id, result: Ok(g) });
@@ -457,18 +554,36 @@ mod tests {
     }
 
     fn names(a: &App) -> Vec<String> {
-        a.visible().iter().map(|&i| a.rows[i].entry.path.file_name().unwrap().to_string_lossy().into_owned()).collect()
+        a.visible()
+            .iter()
+            .map(|&i| {
+                a.rows[i]
+                    .entry
+                    .path
+                    .file_name()
+                    .unwrap()
+                    .to_string_lossy()
+                    .into_owned()
+            })
+            .collect()
     }
 
     #[test]
     fn sort_by_size_desc_pending_last() {
-        let a = app(vec![("a", Kind::Orphan, Some(10), None), ("b", Kind::Orphan, None, None), ("c", Kind::Orphan, Some(30), None)]);
+        let a = app(vec![
+            ("a", Kind::Orphan, Some(10), None),
+            ("b", Kind::Orphan, None, None),
+            ("c", Kind::Orphan, Some(30), None),
+        ]);
         assert_eq!(names(&a), ["c", "a", "b"]);
     }
 
     #[test]
     fn sort_cycles_to_state() {
-        let mut a = app(vec![("r", Kind::Worktree, Some(30), risky()), ("d", Kind::Worktree, Some(10), done())]);
+        let mut a = app(vec![
+            ("r", Kind::Worktree, Some(30), risky()),
+            ("d", Kind::Worktree, Some(10), done()),
+        ]);
         a.handle_key(key('s')); // age
         a.handle_key(key('s')); // state
         assert_eq!(a.sort, SortKey::State);
@@ -477,7 +592,10 @@ mod tests {
 
     #[test]
     fn filter_is_case_insensitive() {
-        let mut a = app(vec![("App-One", Kind::Orphan, Some(1), None), ("other", Kind::Orphan, Some(2), None)]);
+        let mut a = app(vec![
+            ("App-One", Kind::Orphan, Some(1), None),
+            ("other", Kind::Orphan, Some(2), None),
+        ]);
         for c in ['/', 'a', 'p', 'P'] {
             a.handle_key(key(c));
         }
@@ -494,7 +612,14 @@ mod tests {
     fn d_opens_button_prompt_with_no_selected_and_enter_cancels() {
         let mut a = app(vec![("x", Kind::Worktree, Some(1), done())]);
         assert!(a.handle_key(key('d')).is_empty());
-        assert!(matches!(a.mode, Mode::Confirm { strict: false, yes_selected: false, .. }));
+        assert!(matches!(
+            a.mode,
+            Mode::Confirm {
+                strict: false,
+                yes_selected: false,
+                ..
+            }
+        ));
         assert!(a.handle_key(code(KeyCode::Enter)).is_empty());
         assert_eq!(a.mode, Mode::Normal);
         assert_eq!(a.rows[0].status, RowStatus::Idle);
@@ -505,8 +630,21 @@ mod tests {
         let mut a = app(vec![("x", Kind::Worktree, Some(1), done())]);
         a.handle_key(key('d'));
         assert!(a.handle_key(code(KeyCode::Tab)).is_empty());
-        assert!(matches!(a.mode, Mode::Confirm { yes_selected: true, .. }));
-        assert_eq!(a.handle_key(code(KeyCode::Enter)), vec![Command::Delete { ids: vec![0], action: Action::Remove, strict: false }]);
+        assert!(matches!(
+            a.mode,
+            Mode::Confirm {
+                yes_selected: true,
+                ..
+            }
+        ));
+        assert_eq!(
+            a.handle_key(code(KeyCode::Enter)),
+            vec![Command::Delete {
+                ids: vec![0],
+                action: Action::Remove,
+                strict: false
+            }]
+        );
         assert_eq!(a.rows[0].status, RowStatus::Deleting);
         assert_eq!(a.mode, Mode::Normal);
     }
@@ -518,7 +656,13 @@ mod tests {
         assert!(a.handle_key(key('y')).is_empty());
         assert!(a.handle_key(key('Y')).is_empty());
         assert_eq!(a.rows[0].status, RowStatus::Idle);
-        assert!(matches!(a.mode, Mode::Confirm { yes_selected: false, .. }));
+        assert!(matches!(
+            a.mode,
+            Mode::Confirm {
+                yes_selected: false,
+                ..
+            }
+        ));
     }
 
     #[test]
@@ -526,13 +670,37 @@ mod tests {
         let mut a = app(vec![("x", Kind::Worktree, Some(1), done())]);
         a.handle_key(key('d'));
         a.handle_key(code(KeyCode::Right));
-        assert!(matches!(a.mode, Mode::Confirm { yes_selected: true, .. }));
+        assert!(matches!(
+            a.mode,
+            Mode::Confirm {
+                yes_selected: true,
+                ..
+            }
+        ));
         a.handle_key(code(KeyCode::Left));
-        assert!(matches!(a.mode, Mode::Confirm { yes_selected: false, .. }));
+        assert!(matches!(
+            a.mode,
+            Mode::Confirm {
+                yes_selected: false,
+                ..
+            }
+        ));
         a.handle_key(code(KeyCode::BackTab));
-        assert!(matches!(a.mode, Mode::Confirm { yes_selected: true, .. }));
+        assert!(matches!(
+            a.mode,
+            Mode::Confirm {
+                yes_selected: true,
+                ..
+            }
+        ));
         a.handle_key(code(KeyCode::Tab));
-        assert!(matches!(a.mode, Mode::Confirm { yes_selected: false, .. }));
+        assert!(matches!(
+            a.mode,
+            Mode::Confirm {
+                yes_selected: false,
+                ..
+            }
+        ));
     }
 
     #[test]
@@ -554,7 +722,11 @@ mod tests {
         a.handle_key(code(KeyCode::Tab));
         assert_eq!(
             a.handle_key(code(KeyCode::Enter)),
-            vec![Command::Delete { ids: vec![0], action: Action::RemoveAndBranch, strict: false }]
+            vec![Command::Delete {
+                ids: vec![0],
+                action: Action::RemoveAndBranch,
+                strict: false
+            }]
         );
     }
 
@@ -570,7 +742,14 @@ mod tests {
         for c in ['y', 'e', 's'] {
             a.handle_key(key(c));
         }
-        assert_eq!(a.handle_key(code(KeyCode::Enter)), vec![Command::Delete { ids: vec![0], action: Action::Remove, strict: true }]);
+        assert_eq!(
+            a.handle_key(code(KeyCode::Enter)),
+            vec![Command::Delete {
+                ids: vec![0],
+                action: Action::Remove,
+                strict: true
+            }]
+        );
     }
 
     #[test]
@@ -582,7 +761,10 @@ mod tests {
 
     #[test]
     fn marks_apply_to_all_and_strict_if_any_risky() {
-        let mut a = app(vec![("d", Kind::Worktree, Some(20), done()), ("r", Kind::Worktree, Some(10), risky())]);
+        let mut a = app(vec![
+            ("d", Kind::Worktree, Some(20), done()),
+            ("r", Kind::Worktree, Some(10), risky()),
+        ]);
         a.handle_key(key(' '));
         a.handle_key(key('j'));
         a.handle_key(key(' '));
@@ -602,12 +784,21 @@ mod tests {
         let mut a = app(vec![("c", Kind::Clone, Some(1), None)]);
         assert!(a.handle_key(key('d')).is_empty());
         assert_eq!(a.mode, Mode::Normal);
-        assert!(a.rows[0].note.as_deref().unwrap().contains("delete manually"));
+        assert!(
+            a.rows[0]
+                .note
+                .as_deref()
+                .unwrap()
+                .contains("delete manually")
+        );
     }
 
     #[test]
     fn clone_dropped_from_mixed_marks() {
-        let mut a = app(vec![("c", Kind::Clone, Some(20), None), ("o", Kind::Orphan, Some(10), None)]);
+        let mut a = app(vec![
+            ("c", Kind::Clone, Some(20), None),
+            ("o", Kind::Orphan, Some(10), None),
+        ]);
         a.handle_key(key(' '));
         a.handle_key(key('j'));
         a.handle_key(key(' '));
@@ -617,8 +808,14 @@ mod tests {
 
     #[test]
     fn deleted_adds_freed_and_removes_row() {
-        let mut a = app(vec![("x", Kind::Orphan, Some(4096), None), ("y", Kind::Orphan, Some(1), None)]);
-        a.apply(Update::Deleted { id: 0, note: Some("x".into()) });
+        let mut a = app(vec![
+            ("x", Kind::Orphan, Some(4096), None),
+            ("y", Kind::Orphan, Some(1), None),
+        ]);
+        a.apply(Update::Deleted {
+            id: 0,
+            note: Some("x".into()),
+        });
         assert_eq!(a.freed, 4096);
         assert_eq!(a.rows.len(), 1);
         assert_eq!(a.message.as_deref(), Some("x"));
@@ -627,20 +824,29 @@ mod tests {
     #[test]
     fn delete_failed_marks_row() {
         let mut a = app(vec![("x", Kind::Orphan, Some(1), None)]);
-        a.apply(Update::DeleteFailed { id: 0, error: "locked".into() });
+        a.apply(Update::DeleteFailed {
+            id: 0,
+            error: "locked".into(),
+        });
         assert_eq!(a.rows[0].status, RowStatus::Failed("locked".into()));
     }
 
     #[test]
     fn fetch_failed_notes_rows_of_that_repo() {
         let mut a = app(vec![("x", Kind::Worktree, Some(1), done())]);
-        a.apply(Update::FetchFailed { main_repo: PathBuf::from("/r/p/main"), error: "offline".into() });
+        a.apply(Update::FetchFailed {
+            main_repo: PathBuf::from("/r/p/main"),
+            error: "offline".into(),
+        });
         assert!(a.rows[0].note.as_deref().unwrap().contains("offline"));
     }
 
     #[test]
     fn cursor_clamps_after_last_row_deleted() {
-        let mut a = app(vec![("big", Kind::Orphan, Some(30), None), ("small", Kind::Orphan, Some(10), None)]);
+        let mut a = app(vec![
+            ("big", Kind::Orphan, Some(30), None),
+            ("small", Kind::Orphan, Some(10), None),
+        ]);
         a.handle_key(key('j'));
         a.handle_key(key(' '));
         assert_eq!(a.cursor, 1);
@@ -661,9 +867,17 @@ mod tests {
         a.handle_key(code(KeyCode::Enter));
         assert!(a.deleting());
         assert!(a.handle_key(key('q')).is_empty());
-        assert_eq!(a.mode, Mode::ConfirmQuit { yes_selected: false });
+        assert_eq!(
+            a.mode,
+            Mode::ConfirmQuit {
+                yes_selected: false
+            }
+        );
         assert!(a.handle_key(key('y')).is_empty(), "y is not a shortcut");
-        assert!(a.handle_key(code(KeyCode::Enter)).is_empty(), "Enter on No stays");
+        assert!(
+            a.handle_key(code(KeyCode::Enter)).is_empty(),
+            "Enter on No stays"
+        );
         assert_eq!(a.mode, Mode::Normal);
         a.handle_key(key('q'));
         a.handle_key(code(KeyCode::Tab));
@@ -675,7 +889,10 @@ mod tests {
 
     #[test]
     fn f_emits_fetch_and_marks_worktree_states_pending() {
-        let mut a = app(vec![("w", Kind::Worktree, Some(2), done()), ("o", Kind::Orphan, Some(1), None)]);
+        let mut a = app(vec![
+            ("w", Kind::Worktree, Some(2), done()),
+            ("o", Kind::Orphan, Some(1), None),
+        ]);
         assert_eq!(a.handle_key(key('f')), vec![Command::Fetch]);
         assert_eq!(a.rows[0].git, None);
         assert_eq!(a.rows[0].state(), None);
@@ -684,10 +901,19 @@ mod tests {
 
     #[test]
     fn selection_follows_row_when_list_resorts() {
-        let mut a = app(vec![("x", Kind::Orphan, Some(20), None), ("y", Kind::Orphan, None, None)]);
+        let mut a = app(vec![
+            ("x", Kind::Orphan, Some(20), None),
+            ("y", Kind::Orphan, None, None),
+        ]);
         a.handle_key(key('j'));
         assert_eq!(names(&a)[a.cursor], "y");
-        a.apply(Update::Size { id: 1, size: Size { bytes: 30, partial: false } });
+        a.apply(Update::Size {
+            id: 1,
+            size: Size {
+                bytes: 30,
+                partial: false,
+            },
+        });
         assert_eq!(names(&a), ["y", "x"]);
         assert_eq!(a.selected().unwrap().entry.id, 1);
     }

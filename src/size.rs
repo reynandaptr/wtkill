@@ -16,7 +16,10 @@ pub fn disk_usage(path: &Path) -> Size {
     let seen = Mutex::new(HashSet::new());
     let partial = AtomicBool::new(false);
     let bytes = walk(path, &seen, &partial);
-    Size { bytes, partial: partial.load(Ordering::Relaxed) }
+    Size {
+        bytes,
+        partial: partial.load(Ordering::Relaxed),
+    }
 }
 
 fn walk(path: &Path, seen: &Mutex<HashSet<(u64, u64)>>, partial: &AtomicBool) -> u64 {
@@ -26,7 +29,8 @@ fn walk(path: &Path, seen: &Mutex<HashSet<(u64, u64)>>, partial: &AtomicBool) ->
     };
     let mut own = meta.blocks() * 512;
     // Directories cannot be hard-linked; only dedupe other inodes.
-    if !meta.is_dir() && meta.nlink() > 1 && !seen.lock().unwrap().insert((meta.dev(), meta.ino())) {
+    if !meta.is_dir() && meta.nlink() > 1 && !seen.lock().unwrap().insert((meta.dev(), meta.ino()))
+    {
         own = 0;
     }
     if !meta.is_dir() {
@@ -45,5 +49,8 @@ fn walk(path: &Path, seen: &Mutex<HashSet<(u64, u64)>>, partial: &AtomicBool) ->
             }
         })
         .collect();
-    own + children.par_iter().map(|c| walk(c, seen, partial)).sum::<u64>()
+    own + children
+        .par_iter()
+        .map(|c| walk(c, seen, partial))
+        .sum::<u64>()
 }

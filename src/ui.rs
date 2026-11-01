@@ -4,7 +4,9 @@ use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style, Stylize};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Borders, Cell, Clear, Paragraph, Row as TableRow, Table, TableState, Wrap};
+use ratatui::widgets::{
+    Block, Borders, Cell, Clear, Paragraph, Row as TableRow, Table, TableState, Wrap,
+};
 
 use crate::app::{App, Mode, Row, RowStatus, SortKey};
 use crate::delete::Action;
@@ -20,8 +22,16 @@ fn state_cell(row: &Row) -> (String, Color) {
         (RowStatus::Failed(_), _) => ("✖ failed".into(), Color::Red),
         (_, None) => ("…".into(), Color::DarkGray),
         (_, Some(State::Risky)) => {
-            let dirty = row.git.as_ref().and_then(|g| g.as_ref().ok()).map_or(0, |g| g.dirty_count);
-            let suffix = if dirty > 0 { format!(" {dirty}✎") } else { String::new() };
+            let dirty = row
+                .git
+                .as_ref()
+                .and_then(|g| g.as_ref().ok())
+                .map_or(0, |g| g.dirty_count);
+            let suffix = if dirty > 0 {
+                format!(" {dirty}✎")
+            } else {
+                String::new()
+            };
             (format!("🔴 risky{suffix}"), Color::Red)
         }
         (_, Some(State::Done)) => ("🟢 done".into(), Color::Green),
@@ -33,17 +43,25 @@ fn state_cell(row: &Row) -> (String, Color) {
 
 pub fn render(frame: &mut Frame, app: &App, now_unix: i64, spinner_tick: usize) {
     let area = frame.area();
-    let [header, table, detail, footer] =
-        Layout::vertical([Constraint::Length(1), Constraint::Min(3), Constraint::Length(8), Constraint::Length(1)])
-            .areas(area);
+    let [header, table, detail, footer] = Layout::vertical([
+        Constraint::Length(1),
+        Constraint::Min(3),
+        Constraint::Length(8),
+        Constraint::Length(1),
+    ])
+    .areas(area);
     render_header(frame, app, header);
     render_table(frame, app, table, now_unix, spinner_tick);
     render_detail(frame, app, detail);
     render_footer(frame, app, footer);
     match &app.mode {
-        Mode::Confirm { ids, action, strict, input, yes_selected } => {
-            render_confirm(frame, app, ids, *action, *strict, input, *yes_selected)
-        }
+        Mode::Confirm {
+            ids,
+            action,
+            strict,
+            input,
+            yes_selected,
+        } => render_confirm(frame, app, ids, *action, *strict, input, *yes_selected),
         Mode::ConfirmQuit { yes_selected } => {
             let lines = vec![
                 Line::from("Deletions are still running."),
@@ -59,21 +77,42 @@ pub fn render(frame: &mut Frame, app: &App, now_unix: i64, spinner_tick: usize) 
 }
 
 fn render_header(frame: &mut Frame, app: &App, area: Rect) {
-    let total: u64 = app.rows.iter().filter_map(|r| r.size).map(|s| s.bytes).sum();
+    let total: u64 = app
+        .rows
+        .iter()
+        .filter_map(|r| r.size)
+        .map(|s| s.bytes)
+        .sum();
     let roots: Vec<String> = app.roots.iter().map(|r| r.display().to_string()).collect();
     // Counts first: a long root path must not push them off-screen.
     let mut spans = vec![
         " wtkill ".bold().reversed(),
-        Span::raw(format!("  found {} · {} · ", app.rows.len(), format_size(total))),
-        Span::styled(format!("freed {}", format_size(app.freed)), Style::new().fg(Color::Green)),
+        Span::raw(format!(
+            "  found {} · {} · ",
+            app.rows.len(),
+            format_size(total)
+        )),
+        Span::styled(
+            format!("freed {}", format_size(app.freed)),
+            Style::new().fg(Color::Green),
+        ),
     ];
     if app.scanning {
-        spans.push(Span::styled("  [scanning…]", Style::new().fg(Color::DarkGray)));
+        spans.push(Span::styled(
+            "  [scanning…]",
+            Style::new().fg(Color::DarkGray),
+        ));
     }
     if let Some(m) = &app.message {
-        spans.push(Span::styled(format!("  {m}"), Style::new().fg(Color::Yellow)));
+        spans.push(Span::styled(
+            format!("  {m}"),
+            Style::new().fg(Color::Yellow),
+        ));
     }
-    spans.push(Span::styled(format!("   {}", roots.join(", ")), Style::new().fg(Color::DarkGray)));
+    spans.push(Span::styled(
+        format!("   {}", roots.join(", ")),
+        Style::new().fg(Color::DarkGray),
+    ));
     frame.render_widget(Paragraph::new(Line::from(spans)), area);
 }
 
@@ -83,8 +122,16 @@ fn render_table(frame: &mut Frame, app: &App, area: Rect, now_unix: i64, tick: u
         .iter()
         .map(|&i| {
             let r = &app.rows[i];
-            let mark = if app.marks.contains(&r.entry.id) { "●" } else { " " };
-            let size = if r.size.is_none() { SPINNER[tick % SPINNER.len()].to_string() } else { size_cell(r) };
+            let mark = if app.marks.contains(&r.entry.id) {
+                "●"
+            } else {
+                " "
+            };
+            let size = if r.size.is_none() {
+                SPINNER[tick % SPINNER.len()].to_string()
+            } else {
+                size_cell(r)
+            };
             let (state, color) = state_cell(r);
             TableRow::new(vec![
                 Cell::from(mark),
@@ -113,37 +160,71 @@ fn render_table(frame: &mut Frame, app: &App, area: Rect, now_unix: i64, tick: u
     ];
     let table = Table::new(rows, widths)
         .header(header)
-        .block(Block::new().borders(Borders::TOP | Borders::BOTTOM).title(format!(" sort: {sort} ")))
+        .block(
+            Block::new()
+                .borders(Borders::TOP | Borders::BOTTOM)
+                .title(format!(" sort: {sort} ")),
+        )
         .row_highlight_style(Style::new().add_modifier(Modifier::REVERSED))
         .highlight_symbol("▶");
-    let mut state = TableState::default().with_selected((!visible.is_empty()).then_some(app.cursor));
+    let mut state =
+        TableState::default().with_selected((!visible.is_empty()).then_some(app.cursor));
     frame.render_stateful_widget(table, area, &mut state);
 }
 
 fn render_detail(frame: &mut Frame, app: &App, area: Rect) {
     let Some(r) = app.selected() else {
-        let msg = if app.scanning { "scanning…" } else { "no .worktree entries found" };
+        let msg = if app.scanning {
+            "scanning…"
+        } else {
+            "no .worktree entries found"
+        };
         frame.render_widget(Paragraph::new(msg).dark_gray(), area);
         return;
     };
     let mut lines = vec![Line::from(format!("path  {}", r.entry.path.display()))];
-    let repo = r.entry.main_repo.as_ref().map_or("—".to_string(), |m| m.display().to_string());
+    let repo = r
+        .entry
+        .main_repo
+        .as_ref()
+        .map_or("—".to_string(), |m| m.display().to_string());
     lines.push(Line::from(format!("repo  {repo}")));
     match &r.git {
         Some(Ok(g)) => {
             let up = match &g.upstream {
                 Upstream::None => "no upstream".to_string(),
-                Upstream::Tracking { name, ahead, behind } => format!("{name} (ahead {ahead}, behind {behind})"),
-                Upstream::Gone { name } if g.squash_merged => format!("{name} gone — changes merged into default branch"),
+                Upstream::Tracking {
+                    name,
+                    ahead,
+                    behind,
+                } => format!("{name} (ahead {ahead}, behind {behind})"),
+                Upstream::Gone { name } if g.squash_merged => {
+                    format!("{name} gone — changes merged into default branch")
+                }
                 Upstream::Gone { name } => format!("{name} gone"),
             };
             lines.push(Line::from(format!("git   {} · {up}", branch_cell(r))));
             if g.dirty_count > 0 {
-                lines.push(Line::from(format!("dirty {} file(s): {}", g.dirty_count, g.dirty_paths.join(", "))).red());
+                lines.push(
+                    Line::from(format!(
+                        "dirty {} file(s): {}",
+                        g.dirty_count,
+                        g.dirty_paths.join(", ")
+                    ))
+                    .red(),
+                );
             }
             if g.local_only > 0 {
-                let label = if g.squash_merged { "commits (merged)" } else { "local-only commits" };
-                lines.push(Line::from(format!("{} {label}: {}", g.local_only, g.local_only_subjects.join(" · "))));
+                let label = if g.squash_merged {
+                    "commits (merged)"
+                } else {
+                    "local-only commits"
+                };
+                lines.push(Line::from(format!(
+                    "{} {label}: {}",
+                    g.local_only,
+                    g.local_only_subjects.join(" · ")
+                )));
             }
         }
         Some(Err(e)) => lines.push(Line::from(format!("git error: {e}")).red()),
@@ -162,8 +243,14 @@ fn render_footer(frame: &mut Frame, app: &App, area: Rect) {
     let text = match app.mode {
         Mode::Filter => format!(" filter: {}▏  Enter apply · Esc clear", app.filter),
         _ => {
-            let filter = if app.filter.is_empty() { String::new() } else { format!(" [filter: {}]", app.filter) };
-            format!(" ↑↓/jk move · space mark · d delete · D delete+branch · f fetch · s sort · / filter · q quit{filter}")
+            let filter = if app.filter.is_empty() {
+                String::new()
+            } else {
+                format!(" [filter: {}]", app.filter)
+            };
+            format!(
+                " ↑↓/jk move · space mark · d delete · D delete+branch · f fetch · s sort · / filter · q quit{filter}"
+            )
         }
     };
     frame.render_widget(Paragraph::new(text).dark_gray(), area);
@@ -172,8 +259,17 @@ fn render_footer(frame: &mut Frame, app: &App, area: Rect) {
 /// `[ No ]   [ Yes ]` with the focused button highlighted.
 fn buttons(yes_selected: bool) -> Line<'static> {
     let focused = Style::new().add_modifier(Modifier::REVERSED | Modifier::BOLD);
-    let (no, yes) = if yes_selected { (Style::new(), focused) } else { (focused, Style::new()) };
-    Line::from(vec![Span::styled("[ No ]", no), Span::raw("   "), Span::styled("[ Yes ]", yes)]).centered()
+    let (no, yes) = if yes_selected {
+        (Style::new(), focused)
+    } else {
+        (focused, Style::new())
+    };
+    Line::from(vec![
+        Span::styled("[ No ]", no),
+        Span::raw("   "),
+        Span::styled("[ Yes ]", yes),
+    ])
+    .centered()
 }
 
 fn render_confirm(
@@ -187,8 +283,19 @@ fn render_confirm(
 ) {
     let rows: Vec<&Row> = ids.iter().filter_map(|id| app.row(*id)).collect();
     let bytes: u64 = rows.iter().filter_map(|r| r.size).map(|s| s.bytes).sum();
-    let what = if action == Action::RemoveAndBranch { " and their local branches" } else { "" };
-    let mut lines = vec![Line::from(format!("Delete {} item(s){what}, freeing {}?", rows.len(), format_size(bytes))), Line::from("")];
+    let what = if action == Action::RemoveAndBranch {
+        " and their local branches"
+    } else {
+        ""
+    };
+    let mut lines = vec![
+        Line::from(format!(
+            "Delete {} item(s){what}, freeing {}?",
+            rows.len(),
+            format_size(bytes)
+        )),
+        Line::from(""),
+    ];
     // Each item is one line: "• " + path + suffix, with the path shortened
     // from the left to fit, so the bullet never ends up on its own line.
     let inner = popup_width(frame.area()).saturating_sub(2) as usize;
@@ -203,20 +310,31 @@ fn render_confirm(
             suffix = " — git status unknown".to_string();
         }
         let room = inner.saturating_sub(2 + suffix.chars().count()).max(12);
-        lines.push(Line::from(format!("• {}{suffix}", truncate_left(&r.display_path(), room))));
+        lines.push(Line::from(format!(
+            "• {}{suffix}",
+            truncate_left(&r.display_path(), room)
+        )));
     }
     if rows.len() > 8 {
         lines.push(Line::from(format!("… and {} more", rows.len() - 8)));
     }
     lines.push(Line::from(""));
     if strict {
-        lines.push(Line::from("Uncommitted or unpushed work will be lost.").red().bold());
+        lines.push(
+            Line::from("Uncommitted or unpushed work will be lost.")
+                .red()
+                .bold(),
+        );
         lines.push(Line::from(format!("type yes and press Enter: {input}▏")));
         lines.push(Line::from("Esc cancels").dark_gray());
         popup(frame, " ⚠ Delete — may lose work ", lines, Color::Red);
     } else {
         lines.push(buttons(yes_selected));
-        lines.push(Line::from("Tab switch · Enter choose · Esc cancel").dark_gray().centered());
+        lines.push(
+            Line::from("Tab switch · Enter choose · Esc cancel")
+                .dark_gray()
+                .centered(),
+        );
         popup(frame, " Delete ", lines, Color::Cyan);
     }
 }
@@ -246,7 +364,9 @@ fn truncate_left(s: &str, max: usize) -> String {
 fn popup(frame: &mut Frame, title: &str, lines: Vec<Line>, color: Color) {
     let area = frame.area();
     let width = popup_width(area);
-    let block = Block::bordered().title(title.to_string()).border_style(Style::new().fg(color));
+    let block = Block::bordered()
+        .title(title.to_string())
+        .border_style(Style::new().fg(color));
     let paragraph = Paragraph::new(lines).block(block).wrap(Wrap { trim: true });
     let rendered = paragraph.line_count(width.saturating_sub(2));
     let height = u16::try_from(rendered).unwrap_or(u16::MAX).min(area.height);
@@ -290,8 +410,23 @@ mod tests {
     fn sample() -> App {
         let mut a = App::new(vec![PathBuf::from("/r")]);
         let rows = [
-            ("app-done", Kind::Worktree, 1_288_490_189u64, Some(git(0, Upstream::Gone { name: "origin/x".into() }))),
-            ("app-dirty", Kind::Worktree, 4096, Some(git(3, Upstream::None))),
+            (
+                "app-done",
+                Kind::Worktree,
+                1_288_490_189u64,
+                Some(git(
+                    0,
+                    Upstream::Gone {
+                        name: "origin/x".into(),
+                    },
+                )),
+            ),
+            (
+                "app-dirty",
+                Kind::Worktree,
+                4096,
+                Some(git(3, Upstream::None)),
+            ),
             ("notes.md", Kind::Orphan, 4096, None),
         ];
         for (id, (name, kind, bytes, g)) in rows.into_iter().enumerate() {
@@ -303,7 +438,13 @@ mod tests {
                 main_repo: Some(PathBuf::from("/r/p/app")),
                 is_symlink: false,
             }));
-            a.apply(Update::Size { id, size: Size { bytes, partial: false } });
+            a.apply(Update::Size {
+                id,
+                size: Size {
+                    bytes,
+                    partial: false,
+                },
+            });
             if let Some(g) = g {
                 a.apply(Update::Git { id, result: Ok(g) });
             }
@@ -328,7 +469,16 @@ mod tests {
     #[test]
     fn renders_header_rows_and_footer() {
         let text = draw(&sample(), 120, 30);
-        for s in ["found 3", "freed 0 B", "done", "risky 3✎", "orphan", "1.2 GB", "d delete", "feat/x"] {
+        for s in [
+            "found 3",
+            "freed 0 B",
+            "done",
+            "risky 3✎",
+            "orphan",
+            "1.2 GB",
+            "d delete",
+            "feat/x",
+        ] {
             assert!(text.contains(s), "missing {s:?} in\n{text}");
         }
     }
@@ -336,16 +486,28 @@ mod tests {
     #[test]
     fn counts_visible_with_long_root() {
         let mut a = sample();
-        a.roots = vec![PathBuf::from(format!("/{}", "very-long-directory-name/".repeat(8)))];
+        a.roots = vec![PathBuf::from(format!(
+            "/{}",
+            "very-long-directory-name/".repeat(8)
+        ))];
         let text = draw(&a, 80, 20);
         let header = text.lines().next().unwrap();
-        assert!(header.contains("found 3") && header.contains("freed 0 B"), "{header}");
+        assert!(
+            header.contains("found 3") && header.contains("freed 0 B"),
+            "{header}"
+        );
     }
 
     #[test]
     fn strict_confirm_shows_type_yes() {
         let mut a = sample();
-        a.mode = Mode::Confirm { ids: vec![1], action: Action::Remove, strict: true, input: "ye".into(), yes_selected: false };
+        a.mode = Mode::Confirm {
+            ids: vec![1],
+            action: Action::Remove,
+            strict: true,
+            input: "ye".into(),
+            yes_selected: false,
+        };
         let text = draw(&a, 120, 30);
         assert!(text.contains("type yes"), "{text}");
         assert!(text.contains("3 dirty"), "{text}");
@@ -354,14 +516,26 @@ mod tests {
     #[test]
     fn button_confirm_shows_no_and_yes() {
         let mut a = sample();
-        a.mode = Mode::Confirm { ids: vec![0], action: Action::Remove, strict: false, input: String::new(), yes_selected: false };
+        a.mode = Mode::Confirm {
+            ids: vec![0],
+            action: Action::Remove,
+            strict: false,
+            input: String::new(),
+            yes_selected: false,
+        };
         let text = draw(&a, 120, 30);
-        assert!(text.contains("[ No ]") && text.contains("[ Yes ]"), "{text}");
+        assert!(
+            text.contains("[ No ]") && text.contains("[ Yes ]"),
+            "{text}"
+        );
         assert!(text.contains("Tab"), "{text}");
         assert!(!text.contains("[y] delete"), "{text}");
         a.mode = Mode::ConfirmQuit { yes_selected: true };
         let text = draw(&a, 120, 30);
-        assert!(text.contains("[ No ]") && text.contains("[ Yes ]"), "{text}");
+        assert!(
+            text.contains("[ No ]") && text.contains("[ Yes ]"),
+            "{text}"
+        );
     }
 
     fn with_long_path(name: &str) -> App {
@@ -374,19 +548,40 @@ mod tests {
             main_repo: None,
             is_symlink: false,
         }));
-        a.apply(Update::Size { id: 9, size: Size { bytes: 365_900_000, partial: false } });
+        a.apply(Update::Size {
+            id: 9,
+            size: Size {
+                bytes: 365_900_000,
+                partial: false,
+            },
+        });
         a
     }
 
     #[test]
     fn long_path_keeps_buttons_visible_and_bullet_on_its_line() {
         // Screenshot repro: a 71-char path wrapped and pushed the buttons out.
-        let mut a = with_long_path("acmecorp/acme-webapp/.worktree/acme-webapp-chore-regional-backend-origin");
-        a.mode = Mode::Confirm { ids: vec![9], action: Action::Remove, strict: false, input: String::new(), yes_selected: false };
+        let mut a = with_long_path(
+            "acmecorp/acme-webapp/.worktree/acme-webapp-chore-regional-backend-origin",
+        );
+        a.mode = Mode::Confirm {
+            ids: vec![9],
+            action: Action::Remove,
+            strict: false,
+            input: String::new(),
+            yes_selected: false,
+        };
         for (w, h) in [(100, 30), (80, 24), (60, 20)] {
             let text = draw(&a, w, h);
-            assert!(text.contains("[ No ]") && text.contains("[ Yes ]"), "{w}x{h}\n{text}");
-            assert!(text.lines().any(|l| l.contains("•") && l.contains("origin")), "bullet split from path at {w}x{h}\n{text}");
+            assert!(
+                text.contains("[ No ]") && text.contains("[ Yes ]"),
+                "{w}x{h}\n{text}"
+            );
+            assert!(
+                text.lines()
+                    .any(|l| l.contains("•") && l.contains("origin")),
+                "bullet split from path at {w}x{h}\n{text}"
+            );
         }
     }
 
@@ -394,7 +589,13 @@ mod tests {
     fn long_path_keeps_strict_input_visible() {
         let long = format!("acmecorp/{}/.worktree/x", "very-long-segment-".repeat(8));
         let mut a = with_long_path(&long);
-        a.mode = Mode::Confirm { ids: vec![9, 1], action: Action::Remove, strict: true, input: String::new(), yes_selected: false };
+        a.mode = Mode::Confirm {
+            ids: vec![9, 1],
+            action: Action::Remove,
+            strict: true,
+            input: String::new(),
+            yes_selected: false,
+        };
         let text = draw(&a, 80, 24);
         assert!(text.contains("type yes"), "{text}");
         assert!(text.contains("Esc cancels"), "{text}");
@@ -412,7 +613,13 @@ mod tests {
         let mut a = sample();
         draw(&a, 40, 10);
         draw(&a, 10, 3);
-        a.mode = Mode::Confirm { ids: vec![0, 1, 2], action: Action::Remove, strict: true, input: String::new(), yes_selected: false };
+        a.mode = Mode::Confirm {
+            ids: vec![0, 1, 2],
+            action: Action::Remove,
+            strict: true,
+            input: String::new(),
+            yes_selected: false,
+        };
         draw(&a, 10, 3);
         draw(&a, 1, 1);
     }

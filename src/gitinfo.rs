@@ -38,10 +38,16 @@ pub fn parse_upstream(line: &str) -> Upstream {
     }
     let track = parts.next().unwrap_or("").trim();
     if track == "[gone]" {
-        return Upstream::Gone { name: name.to_string() };
+        return Upstream::Gone {
+            name: name.to_string(),
+        };
     }
     let (mut ahead, mut behind) = (0, 0);
-    for part in track.trim_start_matches('[').trim_end_matches(']').split(',') {
+    for part in track
+        .trim_start_matches('[')
+        .trim_end_matches(']')
+        .split(',')
+    {
         let mut words = part.split_whitespace();
         match (words.next(), words.next().and_then(|n| n.parse().ok())) {
             (Some("ahead"), Some(n)) => ahead = n,
@@ -49,7 +55,11 @@ pub fn parse_upstream(line: &str) -> Upstream {
             _ => {}
         }
     }
-    Upstream::Tracking { name: name.to_string(), ahead, behind }
+    Upstream::Tracking {
+        name: name.to_string(),
+        ahead,
+        behind,
+    }
 }
 
 /// Inspect a worktree. Any failing git command fails the whole inspection.
@@ -58,27 +68,50 @@ pub fn inspect(worktree: &Path) -> Result<GitInfo, String> {
         .ok()
         .map(|s| s.trim().to_string())
         .filter(|s| !s.is_empty());
-    let head_oid = run_git(worktree, &["rev-parse", "HEAD"])?.trim().to_string();
-    let head_short = head_oid.chars().take(7).collect();
-    let (dirty_count, dirty_paths) =
-        parse_porcelain_z(&run_git_bytes(worktree, &["status", "--porcelain=v1", "-z", "--untracked-files=all", "--ignore-submodules=none"])?);
-    let local_only = run_git(worktree, &["rev-list", "--count", "HEAD", "--not", "--remotes"])?
+    let head_oid = run_git(worktree, &["rev-parse", "HEAD"])?
         .trim()
-        .parse()
-        .map_err(|e| format!("unexpected rev-list output: {e}"))?;
+        .to_string();
+    let head_short = head_oid.chars().take(7).collect();
+    let (dirty_count, dirty_paths) = parse_porcelain_z(&run_git_bytes(
+        worktree,
+        &[
+            "status",
+            "--porcelain=v1",
+            "-z",
+            "--untracked-files=all",
+            "--ignore-submodules=none",
+        ],
+    )?);
+    let local_only = run_git(
+        worktree,
+        &["rev-list", "--count", "HEAD", "--not", "--remotes"],
+    )?
+    .trim()
+    .parse()
+    .map_err(|e| format!("unexpected rev-list output: {e}"))?;
     let max = format!("-n{MAX_SUBJECTS}");
-    let local_only_subjects = run_git(worktree, &["log", "--format=%s", &max, "HEAD", "--not", "--remotes"])?
-        .lines()
-        .map(str::to_string)
-        .collect();
+    let local_only_subjects = run_git(
+        worktree,
+        &["log", "--format=%s", &max, "HEAD", "--not", "--remotes"],
+    )?
+    .lines()
+    .map(str::to_string)
+    .collect();
     let upstream = match &branch {
         None => Upstream::None,
         Some(b) => parse_upstream(&run_git(
             worktree,
-            &["for-each-ref", "--format=%(upstream:short)%00%(upstream:track)", &format!("refs/heads/{b}")],
+            &[
+                "for-each-ref",
+                "--format=%(upstream:short)%00%(upstream:track)",
+                &format!("refs/heads/{b}"),
+            ],
         )?),
     };
-    let last_commit_unix = run_git(worktree, &["log", "-1", "--format=%ct"])?.trim().parse().ok();
+    let last_commit_unix = run_git(worktree, &["log", "-1", "--format=%ct"])?
+        .trim()
+        .parse()
+        .ok();
     let squash_merged = match &upstream {
         Upstream::Gone { name } if local_only > 0 => is_merged_into_default(worktree, name),
         _ => false,
@@ -103,18 +136,36 @@ pub fn inspect(worktree: &Path) -> Result<GitInfo, String> {
 /// conflict resolutions all count); any merge conflict means "not merged".
 /// Writes only tree objects, which git gc collects.
 fn is_merged_into_default(worktree: &Path, upstream: &str) -> bool {
-    let Some(remote) = upstream.split('/').next() else { return false };
-    let Some(base) = default_branch(worktree, remote) else { return false };
-    let Ok(merged) = run_git(worktree, &["merge-tree", "--write-tree", &base, "HEAD"]) else { return false };
-    let Ok(base_tree) = run_git(worktree, &["rev-parse", &format!("{base}^{{tree}}")]) else { return false };
+    let Some(remote) = upstream.split('/').next() else {
+        return false;
+    };
+    let Some(base) = default_branch(worktree, remote) else {
+        return false;
+    };
+    let Ok(merged) = run_git(worktree, &["merge-tree", "--write-tree", &base, "HEAD"]) else {
+        return false;
+    };
+    let Ok(base_tree) = run_git(worktree, &["rev-parse", &format!("{base}^{{tree}}")]) else {
+        return false;
+    };
     merged.lines().next().map(str::trim) == Some(base_tree.trim())
 }
 
 /// `<remote>/HEAD` if set, else `<remote>/main`, else `<remote>/master`.
 fn default_branch(worktree: &Path, remote: &str) -> Option<String> {
-    [format!("{remote}/HEAD"), format!("{remote}/main"), format!("{remote}/master")]
-        .into_iter()
-        .find(|r| run_git(worktree, &["rev-parse", "--verify", "-q", &format!("refs/remotes/{r}")]).is_ok())
+    [
+        format!("{remote}/HEAD"),
+        format!("{remote}/main"),
+        format!("{remote}/master"),
+    ]
+    .into_iter()
+    .find(|r| {
+        run_git(
+            worktree,
+            &["rev-parse", "--verify", "-q", &format!("refs/remotes/{r}")],
+        )
+        .is_ok()
+    })
 }
 
 /// `git fetch --prune` in a main repository.
@@ -131,7 +182,10 @@ mod tests {
         assert_eq!(parse_porcelain_z(b""), (0, vec![]));
         assert_eq!(
             parse_porcelain_z(b" M a.rs\0?? new file.txt\0R  new.rs\0old.rs\0"),
-            (3, vec!["a.rs".to_string(), "new file.txt".into(), "new.rs".into()])
+            (
+                3,
+                vec!["a.rs".to_string(), "new file.txt".into(), "new.rs".into()]
+            )
         );
     }
 
@@ -148,10 +202,19 @@ mod tests {
 
     #[test]
     fn upstream_parsing() {
-        let t = |a, b| Upstream::Tracking { name: "origin/x".into(), ahead: a, behind: b };
+        let t = |a, b| Upstream::Tracking {
+            name: "origin/x".into(),
+            ahead: a,
+            behind: b,
+        };
         assert_eq!(parse_upstream(""), Upstream::None);
         assert_eq!(parse_upstream("\0"), Upstream::None);
-        assert_eq!(parse_upstream("origin/x\0[gone]"), Upstream::Gone { name: "origin/x".into() });
+        assert_eq!(
+            parse_upstream("origin/x\0[gone]"),
+            Upstream::Gone {
+                name: "origin/x".into()
+            }
+        );
         assert_eq!(parse_upstream("origin/x\0"), t(0, 0));
         assert_eq!(parse_upstream("origin/x\0[ahead 2, behind 1]"), t(2, 1));
         assert_eq!(parse_upstream("origin/x\0[behind 4]"), t(0, 4));

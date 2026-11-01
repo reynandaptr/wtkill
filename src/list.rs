@@ -24,14 +24,19 @@ pub fn size_cell(row: &Row) -> String {
 
 pub fn branch_cell(row: &Row) -> String {
     match &row.git {
-        Some(Ok(g)) => g.branch.clone().unwrap_or_else(|| format!("({})", g.head_short)),
+        Some(Ok(g)) => g
+            .branch
+            .clone()
+            .unwrap_or_else(|| format!("({})", g.head_short)),
         _ => "—".to_string(),
     }
 }
 
 pub fn age_cell(row: &Row, now_unix: i64) -> String {
     match &row.git {
-        Some(Ok(g)) => g.last_commit_unix.map_or("—".to_string(), |t| format_age(now_unix - t)),
+        Some(Ok(g)) => g
+            .last_commit_unix
+            .map_or("—".to_string(), |t| format_age(now_unix - t)),
         _ => "—".to_string(),
     }
 }
@@ -61,9 +66,15 @@ pub fn table(app: &App, now_unix: i64) -> String {
     let line = |r: &[String; 5]| {
         let pad = |s: &str, w: usize| format!("{s}{}", " ".repeat(w - s.chars().count()));
         let size = format!("{}{}", " ".repeat(widths[0] - r[0].chars().count()), r[0]);
-        format!("{size}  {}  {}  {}  {}", pad(&r[1], widths[1]), pad(&r[2], widths[2]), pad(&r[3], widths[3]), r[4])
-            .trim_end()
-            .to_string()
+        format!(
+            "{size}  {}  {}  {}  {}",
+            pad(&r[1], widths[1]),
+            pad(&r[2], widths[2]),
+            pad(&r[3], widths[3]),
+            r[4]
+        )
+        .trim_end()
+        .to_string()
     };
     let mut out = line(&header);
     out.push('\n');
@@ -83,7 +94,11 @@ pub fn json(app: &App) -> Value {
                 let g = r.git.as_ref().and_then(|g| g.as_ref().ok());
                 let upstream = g.map(|g| match &g.upstream {
                     Upstream::None => Value::Null,
-                    Upstream::Tracking { name, ahead, behind } => json!({"name": name, "ahead": ahead, "behind": behind}),
+                    Upstream::Tracking {
+                        name,
+                        ahead,
+                        behind,
+                    } => json!({"name": name, "ahead": ahead, "behind": behind}),
                     Upstream::Gone { name } => json!({"name": name, "gone": true}),
                 });
                 let error = match (&r.git, &r.status) {

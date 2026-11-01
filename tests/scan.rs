@@ -21,7 +21,13 @@ fn classifies_every_child() {
             .clone()
     };
     let main = f.main.canonicalize().unwrap();
-    for n in ["app-done", "app-pushed", "app-dirty", "app-local", "app-feat x+1"] {
+    for n in [
+        "app-done",
+        "app-pushed",
+        "app-dirty",
+        "app-local",
+        "app-feat x+1",
+    ] {
         assert_eq!(by(n).kind, Kind::Worktree, "{n}");
         assert_eq!(by(n).main_repo.as_deref(), Some(main.as_path()), "{n}");
     }
@@ -43,11 +49,34 @@ fn overlapping_roots_dedupe() {
 
 #[test]
 fn relative_gitdir_is_worktree() {
+    // worktree.useRelativePaths needs git 2.48+ (macOS runners may be older).
+    if wtkill::git::git_version() < Some((2, 48, 0)) {
+        eprintln!("skipped: needs git >= 2.48");
+        return;
+    }
     let f = Fixture::standard();
     let p = f.wt("app-rel");
-    f.git(&f.main, &["-c", "worktree.useRelativePaths=true", "worktree", "add", "-q", "-b", "rel", p.to_str().unwrap()]);
+    f.git(
+        &f.main,
+        &[
+            "-c",
+            "worktree.useRelativePaths=true",
+            "worktree",
+            "add",
+            "-q",
+            "-b",
+            "rel",
+            p.to_str().unwrap(),
+        ],
+    );
     let gitfile = std::fs::read_to_string(p.join(".git")).unwrap();
-    assert!(!gitfile.trim_start_matches("gitdir:").trim().starts_with('/'), "fixture should be relative: {gitfile}");
+    assert!(
+        !gitfile
+            .trim_start_matches("gitdir:")
+            .trim()
+            .starts_with('/'),
+        "fixture should be relative: {gitfile}"
+    );
     let got = scan(std::slice::from_ref(&f.root));
     let e = got.iter().find(|e| e.path.ends_with("app-rel")).unwrap();
     assert_eq!(e.kind, Kind::Worktree);

@@ -2,6 +2,14 @@
 name = "wtkill"
 version = "0.1.0"
 edition = "2024"
+description = "Find git worktrees under .worktree/ folders, see their size and state, and delete finished ones safely"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/reynandaptr/wtkill"
+homepage = "https://github.com/reynandaptr/wtkill"
+readme = "README.md"
+keywords = ["git", "worktree", "tui", "cleanup", "disk-usage"]
+categories = ["command-line-utilities", "development-tools"]
+exclude = ["docs/", ".github/"]
 
 [dependencies]
 anyhow = "1.0.104"

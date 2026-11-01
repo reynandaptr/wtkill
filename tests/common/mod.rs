@@ -32,7 +32,10 @@ impl Fixture {
 
     fn add_worktree(&self, name: &str, branch: &str) -> PathBuf {
         let p = self.wt(name);
-        git_in(&self.main, &["worktree", "add", "-q", "-b", branch, p.to_str().unwrap()]);
+        git_in(
+            &self.main,
+            &["worktree", "add", "-q", "-b", branch, p.to_str().unwrap()],
+        );
         p
     }
 
@@ -55,12 +58,24 @@ impl Fixture {
         let wt_dir = root.join("proj/.worktree");
         fs::create_dir_all(&main).unwrap();
         fs::create_dir_all(&wt_dir).unwrap();
-        git_in(tmp.path(), &["init", "-q", "--bare", remote.to_str().unwrap()]);
+        git_in(
+            tmp.path(),
+            &["init", "-q", "--bare", remote.to_str().unwrap()],
+        );
         git_in(&main, &["init", "-q"]);
-        let f = Fixture { tmp, root, remote, main, wt_dir };
+        let f = Fixture {
+            tmp,
+            root,
+            remote,
+            main,
+            wt_dir,
+        };
 
         f.commit(&f.main, "README.md", "init");
-        git_in(&f.main, &["remote", "add", "origin", f.remote.to_str().unwrap()]);
+        git_in(
+            &f.main,
+            &["remote", "add", "origin", f.remote.to_str().unwrap()],
+        );
         f.push(&f.main, "main");
 
         let done = f.add_worktree("app-done", "done");
@@ -98,7 +113,10 @@ impl Fixture {
         fs::create_dir_all(f.wt("orphan-dir")).unwrap();
         fs::write(f.wt("orphan-dir/file.txt"), "x\n").unwrap();
         fs::write(f.wt("notes.md"), "# notes\n").unwrap();
-        git_in(&f.wt_dir, &["clone", "-q", f.remote.to_str().unwrap(), "clone"]);
+        git_in(
+            &f.wt_dir,
+            &["clone", "-q", f.remote.to_str().unwrap(), "clone"],
+        );
 
         fs::create_dir_all(f.main.join("node_modules/x/.worktree/ignored")).unwrap();
         fs::create_dir_all(f.root.join("other/.worktree")).unwrap();

@@ -8,11 +8,17 @@ unpushed work isn't lost by accident.
 
 ## Install
 
+Works on **macOS** and **Linux**. Requires **git 2.38 or newer** (check with
+`git --version`; macOS users may need `brew install git`).
+
+From source (needs a Rust toolchain):
+
 ```sh
-cargo install --path .
+cargo install --git https://github.com/reynandaptr/wtkill
 ```
 
-Needs `git` on `PATH`.
+Prebuilt binaries, Homebrew and `cargo install wtkill` will be available from
+the first release.
 
 ## Usage
 
@@ -86,3 +92,8 @@ cargo clippy --all-targets -- -D warnings
 ```
 
 Design: `docs/superpowers/specs/2026-11-01-wtkill-design.md`.
+
+## License
+
+Licensed under either of [Apache License 2.0](LICENSE-APACHE) or
+[MIT license](LICENSE-MIT), at your option.

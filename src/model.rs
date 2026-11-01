@@ -28,8 +28,14 @@ pub struct Entry {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub enum Upstream {
     None,
-    Tracking { name: String, ahead: u32, behind: u32 },
-    Gone { name: String },
+    Tracking {
+        name: String,
+        ahead: u32,
+        behind: u32,
+    },
+    Gone {
+        name: String,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -91,12 +97,27 @@ pub struct Size {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Update {
     Found(Entry),
-    Size { id: usize, size: Size },
-    Git { id: usize, result: Result<GitInfo, String> },
-    FetchFailed { main_repo: PathBuf, error: String },
+    Size {
+        id: usize,
+        size: Size,
+    },
+    Git {
+        id: usize,
+        result: Result<GitInfo, String>,
+    },
+    FetchFailed {
+        main_repo: PathBuf,
+        error: String,
+    },
     ScanDone,
-    Deleted { id: usize, note: Option<String> },
-    DeleteFailed { id: usize, error: String },
+    Deleted {
+        id: usize,
+        note: Option<String>,
+    },
+    DeleteFailed {
+        id: usize,
+        error: String,
+    },
 }
 
 /// State of an entry; `None` while a worktree's git status is still pending.
@@ -107,7 +128,9 @@ pub fn compute_state(kind: &Kind, git: Option<&Result<GitInfo, String>>) -> Opti
         Kind::Clone => Some(State::Clone),
         Kind::Worktree => match git? {
             Err(_) => Some(State::Unknown),
-            Ok(g) if g.dirty_count > 0 || (g.local_only > 0 && !g.squash_merged) => Some(State::Risky),
+            Ok(g) if g.dirty_count > 0 || (g.local_only > 0 && !g.squash_merged) => {
+                Some(State::Risky)
+            }
             Ok(g) if matches!(g.upstream, Upstream::Gone { .. }) => Some(State::Done),
             Ok(_) => Some(State::Pushed),
         },
@@ -135,22 +158,53 @@ mod tests {
 
     #[test]
     fn state_rules() {
-        let gone = || Upstream::Gone { name: "origin/b".into() };
+        let gone = || Upstream::Gone {
+            name: "origin/b".into(),
+        };
         assert_eq!(compute_state(&Kind::Worktree, None), None);
-        assert_eq!(compute_state(&Kind::Worktree, Some(&Ok(gi(1, 0, Upstream::None)))), Some(State::Risky));
-        assert_eq!(compute_state(&Kind::Worktree, Some(&Ok(gi(0, 2, gone())))), Some(State::Risky));
-        assert_eq!(compute_state(&Kind::Worktree, Some(&Ok(gi(0, 0, gone())))), Some(State::Done));
-        let squashed = GitInfo { squash_merged: true, ..gi(0, 2, gone()) };
-        assert_eq!(compute_state(&Kind::Worktree, Some(&Ok(squashed))), Some(State::Done));
+        assert_eq!(
+            compute_state(&Kind::Worktree, Some(&Ok(gi(1, 0, Upstream::None)))),
+            Some(State::Risky)
+        );
+        assert_eq!(
+            compute_state(&Kind::Worktree, Some(&Ok(gi(0, 2, gone())))),
+            Some(State::Risky)
+        );
+        assert_eq!(
+            compute_state(&Kind::Worktree, Some(&Ok(gi(0, 0, gone())))),
+            Some(State::Done)
+        );
+        let squashed = GitInfo {
+            squash_merged: true,
+            ..gi(0, 2, gone())
+        };
+        assert_eq!(
+            compute_state(&Kind::Worktree, Some(&Ok(squashed))),
+            Some(State::Done)
+        );
         assert_eq!(
             compute_state(
                 &Kind::Worktree,
-                Some(&Ok(gi(0, 0, Upstream::Tracking { name: "origin/b".into(), ahead: 0, behind: 3 })))
+                Some(&Ok(gi(
+                    0,
+                    0,
+                    Upstream::Tracking {
+                        name: "origin/b".into(),
+                        ahead: 0,
+                        behind: 3
+                    }
+                )))
             ),
             Some(State::Pushed)
         );
-        assert_eq!(compute_state(&Kind::Worktree, Some(&Ok(gi(0, 0, Upstream::None)))), Some(State::Pushed));
-        assert_eq!(compute_state(&Kind::Worktree, Some(&Err("x".into()))), Some(State::Unknown));
+        assert_eq!(
+            compute_state(&Kind::Worktree, Some(&Ok(gi(0, 0, Upstream::None)))),
+            Some(State::Pushed)
+        );
+        assert_eq!(
+            compute_state(&Kind::Worktree, Some(&Err("x".into()))),
+            Some(State::Unknown)
+        );
         assert_eq!(compute_state(&Kind::Orphan, None), Some(State::Orphan));
         assert_eq!(compute_state(&Kind::Broken, None), Some(State::Broken));
         assert_eq!(compute_state(&Kind::Clone, None), Some(State::Clone));

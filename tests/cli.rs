@@ -7,15 +7,27 @@ use common::Fixture;
 use serde_json::Value;
 
 fn wtkill(args: &[&str], root: &Path) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_wtkill")).args(args).arg(root).output().unwrap()
+    Command::new(env!("CARGO_BIN_EXE_wtkill"))
+        .args(args)
+        .arg(root)
+        .output()
+        .unwrap()
 }
 
 fn json(f: &Fixture, extra: &[&str]) -> Vec<Value> {
     let mut args = vec!["--list", "--json"];
     args.extend_from_slice(extra);
     let out = wtkill(&args, &f.root);
-    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
-    serde_json::from_slice::<Value>(&out.stdout).unwrap().as_array().unwrap().clone()
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    serde_json::from_slice::<Value>(&out.stdout)
+        .unwrap()
+        .as_array()
+        .unwrap()
+        .clone()
 }
 
 fn by<'a>(rows: &'a [Value], name: &str) -> &'a Value {
@@ -62,7 +74,10 @@ fn list_table_has_header_and_rows() {
     assert!(out.status.success());
     let text = String::from_utf8(out.stdout).unwrap();
     let lines: Vec<&str> = text.lines().collect();
-    assert!(lines[0].contains("SIZE") && lines[0].contains("STATE"), "{text}");
+    assert!(
+        lines[0].contains("SIZE") && lines[0].contains("STATE"),
+        "{text}"
+    );
     assert_eq!(lines.len(), 10, "{text}");
     assert!(text.contains("proj/.worktree/app-feat x+1"), "{text}");
 }
@@ -104,8 +119,38 @@ fn no_root_scans_current_directory_only() {
         .env("HOME", f.tmp.path()) // never fall back to the real home
         .output()
         .unwrap();
-    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
-    let rows: Vec<Value> = serde_json::from_slice::<Value>(&out.stdout).unwrap().as_array().unwrap().clone();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let rows: Vec<Value> = serde_json::from_slice::<Value>(&out.stdout)
+        .unwrap()
+        .as_array()
+        .unwrap()
+        .clone();
     assert_eq!(rows.len(), 9, "{rows:#?}");
-    assert!(rows.iter().all(|r| !r["path"].as_str().unwrap().contains("stray-dir")));
+    assert!(
+        rows.iter()
+            .all(|r| !r["path"].as_str().unwrap().contains("stray-dir"))
+    );
+}
+
+#[test]
+fn too_old_git_is_rejected() {
+    let f = Fixture::standard();
+    let bin = f.tmp.path().join("fakebin");
+    std::fs::create_dir_all(&bin).unwrap();
+    let fake = bin.join("git");
+    std::fs::write(&fake, "#!/bin/sh\necho 'git version 2.30.0'\n").unwrap();
+    std::fs::set_permissions(&fake, std::os::unix::fs::PermissionsExt::from_mode(0o755)).unwrap();
+    let out = Command::new(env!("CARGO_BIN_EXE_wtkill"))
+        .args(["--list"])
+        .arg(&f.root)
+        .env("PATH", &bin)
+        .output()
+        .unwrap();
+    assert_eq!(out.status.code(), Some(1));
+    let err = String::from_utf8_lossy(&out.stderr);
+    assert!(err.contains("2.38") && err.contains("2.30.0"), "{err}");
 }

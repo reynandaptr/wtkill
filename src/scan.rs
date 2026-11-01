@@ -17,13 +17,22 @@ pub fn discover(roots: &[PathBuf], mut on_found: impl FnMut(Entry)) {
     let mut seen: HashSet<PathBuf> = HashSet::new();
     let mut next_id = 0;
     for root in roots {
-        let Ok(root) = root.canonicalize() else { continue };
+        let Ok(root) = root.canonicalize() else {
+            continue;
+        };
         let mut emit = |path: PathBuf| {
             if !seen.insert(path.clone()) {
                 return;
             }
             let (kind, main_repo, is_symlink) = classify(&path);
-            on_found(Entry { id: next_id, path, root: root.clone(), kind, main_repo, is_symlink });
+            on_found(Entry {
+                id: next_id,
+                path,
+                root: root.clone(),
+                kind,
+                main_repo,
+                is_symlink,
+            });
             next_id += 1;
         };
         if root.file_name().is_some_and(|n| n == WORKTREE_DIR) {
@@ -34,7 +43,9 @@ pub fn discover(roots: &[PathBuf], mut on_found: impl FnMut(Entry)) {
         while let Some(dir) = stack.pop() {
             let mut subdirs = vec![];
             for child in sorted_children(&dir) {
-                let Ok(meta) = fs::symlink_metadata(&child) else { continue };
+                let Ok(meta) = fs::symlink_metadata(&child) else {
+                    continue;
+                };
                 if !meta.is_dir() {
                     continue;
                 }
@@ -52,14 +63,18 @@ pub fn discover(roots: &[PathBuf], mut on_found: impl FnMut(Entry)) {
 }
 
 fn sorted_children(dir: &Path) -> Vec<PathBuf> {
-    let Ok(rd) = fs::read_dir(dir) else { return vec![] };
+    let Ok(rd) = fs::read_dir(dir) else {
+        return vec![];
+    };
     let mut v: Vec<PathBuf> = rd.flatten().map(|e| e.path()).collect();
     v.sort();
     v
 }
 
 fn classify(path: &Path) -> (Kind, Option<PathBuf>, bool) {
-    let Ok(meta) = fs::symlink_metadata(path) else { return (Kind::Orphan, None, false) };
+    let Ok(meta) = fs::symlink_metadata(path) else {
+        return (Kind::Orphan, None, false);
+    };
     if meta.file_type().is_symlink() {
         return (Kind::Orphan, None, true);
     }
@@ -91,12 +106,24 @@ fn read_gitdir(worktree: &Path) -> Option<PathBuf> {
 fn main_repo_from_gitdir(gitdir: &Path) -> Option<PathBuf> {
     let common = gitdir.parent()?.parent()?;
     let common = common.canonicalize().ok()?;
-    if common.file_name()? == ".git" { common.parent().map(Path::to_path_buf) } else { Some(common) }
+    if common.file_name()? == ".git" {
+        common.parent().map(Path::to_path_buf)
+    } else {
+        Some(common)
+    }
 }
 
 /// The main repository a worktree belongs to.
 pub fn main_repo_of(worktree: &Path) -> Option<PathBuf> {
-    let out = run_git(worktree, &["rev-parse", "--path-format=absolute", "--git-common-dir"]).ok()?;
+    let out = run_git(
+        worktree,
+        &["rev-parse", "--path-format=absolute", "--git-common-dir"],
+    )
+    .ok()?;
     let common = PathBuf::from(out.trim()).canonicalize().ok()?;
-    if common.file_name()? == ".git" { common.parent().map(Path::to_path_buf) } else { Some(common) }
+    if common.file_name()? == ".git" {
+        common.parent().map(Path::to_path_buf)
+    } else {
+        Some(common)
+    }
 }

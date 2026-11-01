@@ -2,7 +2,7 @@ mod common;
 
 use common::Fixture;
 use wtkill::gitinfo::{fetch, inspect};
-use wtkill::model::{compute_state, Kind, State, Upstream};
+use wtkill::model::{Kind, State, Upstream, compute_state};
 
 fn state(f: &Fixture, name: &str) -> State {
     compute_state(&Kind::Worktree, Some(&inspect(&f.wt(name)))).unwrap()
@@ -91,7 +91,10 @@ fn local_merge_commit_with_new_work_is_risky() {
     // cherry-pick, but a never-pushed merge commit carries extra work.
     let f = Fixture::standard();
     let wt = f.wt("app-evil");
-    f.git(&f.main, &["worktree", "add", "-q", "-b", "evilb", wt.to_str().unwrap()]);
+    f.git(
+        &f.main,
+        &["worktree", "add", "-q", "-b", "evilb", wt.to_str().unwrap()],
+    );
     std::fs::write(f.main.join("other.txt"), "other PR\n").unwrap();
     f.git(&f.main, &["add", "other.txt"]);
     f.git(&f.main, &["commit", "-q", "-m", "other PR"]);
@@ -101,7 +104,10 @@ fn local_merge_commit_with_new_work_is_risky() {
     f.git(&wt, &["commit", "-q", "-m", "A: add b"]);
     f.git(&wt, &["push", "-q", "-u", "origin", "evilb"]);
     f.git(&wt, &["fetch", "-q"]);
-    f.git(&wt, &["merge", "-q", "--no-ff", "--no-commit", "origin/main"]);
+    f.git(
+        &wt,
+        &["merge", "-q", "--no-ff", "--no-commit", "origin/main"],
+    );
     std::fs::write(wt.join("evil.txt"), "precious\n").unwrap();
     f.git(&wt, &["add", "evil.txt"]);
     f.git(&wt, &["commit", "-q", "-m", "merge main + extra work"]);
@@ -126,5 +132,8 @@ fn untracked_counted_even_if_repo_hides_them() {
 fn head_oid_is_full_sha() {
     let f = Fixture::standard();
     let g = inspect(&f.wt("app-pushed")).unwrap();
-    assert_eq!(g.head_oid, f.git(&f.wt("app-pushed"), &["rev-parse", "HEAD"]).trim());
+    assert_eq!(
+        g.head_oid,
+        f.git(&f.wt("app-pushed"), &["rev-parse", "HEAD"]).trim()
+    );
 }

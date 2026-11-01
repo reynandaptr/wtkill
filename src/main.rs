@@ -9,7 +9,7 @@ use ratatui::crossterm::event::{self, Event, KeyEventKind};
 
 use wtkill::app::{App, Command};
 use wtkill::model::Update;
-use wtkill::{list, pipeline, ui};
+use wtkill::{git, list, pipeline, ui};
 
 /// Find git worktrees under `.worktree/` directories and delete finished ones.
 #[derive(Parser, Debug)]
@@ -29,15 +29,27 @@ struct Cli {
 }
 
 fn now_unix() -> i64 {
-    SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |d| d.as_secs() as i64)
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_or(0, |d| d.as_secs() as i64)
 }
 
 fn main() -> ExitCode {
     let cli = Cli::parse();
-    let git_ok = std::process::Command::new("git").arg("--version").output().is_ok_and(|o| o.status.success());
-    if !git_ok {
-        eprintln!("wtkill: git not found on PATH");
-        return ExitCode::from(1);
+    match git::git_version() {
+        None => {
+            eprintln!("wtkill: git not found on PATH");
+            return ExitCode::from(1);
+        }
+        Some(v) if v < git::MIN_GIT => {
+            let (a, b, _) = git::MIN_GIT;
+            eprintln!(
+                "wtkill: git {a}.{b} or newer is required (found {}.{}.{})",
+                v.0, v.1, v.2
+            );
+            return ExitCode::from(1);
+        }
+        Some(_) => {}
     }
     let roots = if cli.roots.is_empty() {
         match std::env::current_dir() {
@@ -74,7 +86,10 @@ fn main() -> ExitCode {
         }
         let _ = handle.join();
         if cli.json {
-            println!("{}", serde_json::to_string_pretty(&list::json(&app)).unwrap_or_default());
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&list::json(&app)).unwrap_or_default()
+            );
         } else {
             print!("{}", list::table(&app, now_unix()));
         }
@@ -109,19 +124,32 @@ fn run_tui(roots: Vec<PathBuf>, fetch: bool) -> std::io::Result<()> {
             if !event::poll(Duration::from_millis(100))? {
                 continue;
             }
-            let Event::Key(key) = event::read()? else { continue };
+            let Event::Key(key) = event::read()? else {
+                continue;
+            };
             if key.kind != KeyEventKind::Press {
                 continue;
             }
             for command in app.handle_key(key) {
                 match command {
-                    Command::Delete { ids, action, strict } => {
+                    Command::Delete {
+                        ids,
+                        action,
+                        strict,
+                    } => {
                         let rows = ids
                             .iter()
                             .filter_map(|id| app.row(*id))
                             .map(|r| (r.entry.clone(), r.git.clone().and_then(Result::ok)))
                             .collect();
-                        deletes.push(pipeline::spawn_delete(rows, action, strict, roots.clone(), cwd.clone(), tx.clone()));
+                        deletes.push(pipeline::spawn_delete(
+                            rows,
+                            action,
+                            strict,
+                            roots.clone(),
+                            cwd.clone(),
+                            tx.clone(),
+                        ));
                     }
                     Command::Fetch => {
                         let entries = app.rows.iter().map(|r| r.entry.clone()).collect();

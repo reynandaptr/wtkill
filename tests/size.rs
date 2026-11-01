@@ -16,7 +16,8 @@ fn counts_blocks_hardlinks_once_and_symlinks_as_links() {
     fs::write(d.join("big"), vec![7u8; 100_000]).unwrap();
     fs::hard_link(d.join("big"), d.join("sub/big-link")).unwrap();
     std::os::unix::fs::symlink("/usr", d.join("usr-link")).unwrap();
-    let expected = blocks(&d) + blocks(&d.join("sub")) + blocks(&d.join("big")) + blocks(&d.join("usr-link"));
+    let expected =
+        blocks(&d) + blocks(&d.join("sub")) + blocks(&d.join("big")) + blocks(&d.join("usr-link"));
     let s = disk_usage(&d);
     assert_eq!(s.bytes, expected);
     assert!(!s.partial);
