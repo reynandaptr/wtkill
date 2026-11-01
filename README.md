@@ -11,14 +11,26 @@ unpushed work isn't lost by accident.
 Works on **macOS** and **Linux**. Requires **git 2.38 or newer** (check with
 `git --version`; macOS users may need `brew install git`).
 
+Homebrew (macOS and Linux):
+
+```sh
+brew install reynandaptr/tap/wtkill
+```
+
+Install script (macOS and Linux, installs into `~/.cargo/bin`):
+
+```sh
+curl --proto '=https' --tlsv1.2 -LsSf https://github.com/reynandaptr/wtkill/releases/latest/download/wtkill-installer.sh | sh
+```
+
+Prebuilt archives for each platform are on the
+[Releases](https://github.com/reynandaptr/wtkill/releases) page.
+
 From source (needs a Rust toolchain):
 
 ```sh
 cargo install --git https://github.com/reynandaptr/wtkill
 ```
-
-Prebuilt binaries, Homebrew and `cargo install wtkill` will be available from
-the first release.
 
 ## Usage
 
